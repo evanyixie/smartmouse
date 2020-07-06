@@ -16,11 +16,12 @@ from tkinter import messagebox
 
 class App:
     def __init__(self, tk):
-        current_time = time.strftime('%Y-%m-%d_%H:%M:%S', time.localtime(time.time()))
+        current_time = time.strftime('%Y-%m-%d_%H-%M-%S', time.localtime(time.time()))
+        log_file_name = current_time + '.txt'
         logging.basicConfig(level=logging.DEBUG,
                             format='%(asctime)s [line:%(lineno)d] %(levelname)s %(message)s',
                             datefmt='%a, %d %b %Y %H:%M:%S',
-                            filename=current_time,
+                            filename=log_file_name,
                             filemode='w')
 
         self.mouse = None
@@ -80,7 +81,7 @@ class App:
             return
 
         current_dir = os.getcwd()
-        current_time = time.strftime('%Y-%m-%d_%H:%M:%S', time.localtime(time.time()))
+        current_time = time.strftime('%Y-%m-%d_%H-%M-%S', time.localtime(time.time()))
         self.dir_name = current_time
         if self.mode_var.get() == 2:
             if self.dir_name_var.get():
@@ -268,6 +269,8 @@ class Mouse:
                 continue
             # 点击借款单稽核
             self.click_audit_bill()
+            # 清空之前多余文件
+            self.delete_pre_file(self.dir_path)
             # 点击下载确认按钮
             self.click_download_confirm_button()
             # 重命名
@@ -284,7 +287,7 @@ class Mouse:
         self.driver.find_element_by_id("svpn_name").send_keys("xueshan")
         # self.driver.find_element_by_id("svpn_name").send_keys("xiongli")
         sleep(self.sleep_time)
-        self.driver.find_element_by_id("svpn_password").send_keys("XSshasha33!")
+        self.driver.find_element_by_id("svpn_password").send_keys("XSshasha33!!")
         # self.driver.find_element_by_id("svpn_password").send_keys("Xl7893120!!")
         sleep(self.sleep_time)
         self.driver.find_element_by_id("logButton").click()
@@ -311,7 +314,7 @@ class Mouse:
         self.set_language_chinese()
         if self.wait_visible_by_id("txt_UserID"):
             self.driver.find_element_by_id("txt_UserID").send_keys("xueshan")
-            self.driver.find_element_by_id("txt_PptextNo").send_keys("abc123@")
+            self.driver.find_element_by_id("txt_PptextNo").send_keys("shasha33@")
             self.driver.find_element_by_id("btn-login").click()
         log_v("login_gs end")
         self.app.log_info("成功登陆浪潮财务系统")
@@ -348,8 +351,8 @@ class Mouse:
         self.app.log_info("准备点击稽核按钮")
         dialog_frame_locator = "//iframe[@id='viewIFrame']"
         self.switch_frame(dialog_frame_locator, False)
-        bill_check_left_button_locator = "//div[@id='printDialog_left']/a[ends-with(text(),'稽核')]"
-        bill_check_right_button_locator = "//div[@id='printDialog_left']/a[ends-with(text(),'稽核')]"
+        bill_check_left_button_locator = "//div[@id='printDialog_left']/a[substring(text(), string-length(text()) - string-length('稽核') +1) = '稽核']"
+        bill_check_right_button_locator = "//div[@id='printDialog_right']/a[substring(text(), string-length(text()) - string-length('稽核') +1) = '稽核']"
         bill_check_button_locator = "//div[@id='printDialog_left']"
         if self.wait_visible_by_xpath(bill_check_right_button_locator, wait_time=5):
             self.click_by_xpath(bill_check_right_button_locator)
@@ -469,7 +472,11 @@ class Mouse:
             self.app.log_info("已经进入报销单列表页面。{0}，{1}。目前准备打印第{2}页的{3}条，总共处理了{4}条。".format(page_limit, bill_total_limit,
                                                                                        self.current_bill_page_number + 1,
                                                                                        self.current_bill_order_number + 1,
-                                                                                       self.total_amount_of_bill_processed + 1))
+                                                                                       self.total_amount_of_bill_processed))
+            self.app.log_info("当前数量统计。该次执行中成功下载{0}条，跳过已下载的{1}条，跳过无信息的账单{2}条，跳过已退回的{3}条".format(self.amount_of_bill_downloaded_successfully,
+                                                                                       self.amount_of_bill_skipped_for_downloaded,
+                                                                                       self.amount_of_bill_skipped_for_no_info,
+                                                                                       self.amount_of_bill_skipped_for_rejected))
         log_v("check_bill_metadata end")
 
     def click_next_page_if_need(self):
@@ -570,8 +577,8 @@ class Mouse:
         log_v("click_fund_settlement_platform begin")
         # 点击资金结算平台
         self.app.log_info("准备点击资金结算平台")
-        if self.wait_visible_by_id("_easyui_tree_30"):
-            self.click_by_id("_easyui_tree_30")
+        if self.wait_visible_by_id("_easyui_tree_32"):
+            self.click_by_id("_easyui_tree_32")
             self.app.log_info("成功点击资金结算平台")
         log_v("click_fund_settlement_platform end")
 
@@ -579,7 +586,7 @@ class Mouse:
         log_v("click_finance_share begin")
         # 点击财务共享
         self.app.log_info("准备点击财务共享")
-        finance_share_locator = "//div[@id='_easyui_tree_27']"
+        finance_share_locator = "//div[@id='_easyui_tree_29']"
         if self.wait_visible_by_xpath(finance_share_locator):
             finance_share = self.driver.find_element_by_xpath(finance_share_locator)
             ActionChains(self.driver).double_click(finance_share).perform()
@@ -611,18 +618,41 @@ class Mouse:
             self.current_file_name = self.prefix + self.current_bill_company_name + self.current_bill_enter_time + self.current_bill_main_number + ".pdf"
             self.current_file_path = os.path.join(self.dir_path, self.current_file_name)
 
+            state_td_element = specify_tr_element.find_element_by_xpath("./td[@field='LSTASKS_ZT']")
             # 判断当前账单是否是退回的账单
             try:
                 # 使用xpath,当前节点前，一定要有.
                 bill_main_number_td_element.find_element_by_xpath(".//span[text()='退回']")
             except NoSuchElementException as e:
                 log_v("current bill is normal")
+                try:
+                    state_td_element.find_element_by_xpath(".//div[text()='退回']")
+                except NoSuchElementException as e:
+                    log_v("current bill is normal")
+                else:
+                    log_v("current bill is rejected. ")
+                    self.app.log_info("当前账单是退回的账单:" + self.current_bill_main_number)
+                    # 发生了NoSuchElementException异常，说明页面中未找到该元素，返回False
+                    self.is_current_bill_rejected = True
             else:
                 log_v("current bill is rejected. ")
                 self.app.log_info("当前账单是退回的账单:" + self.current_bill_main_number)
                 # 发生了NoSuchElementException异常，说明页面中未找到该元素，返回False
                 self.is_current_bill_rejected = True
         log_v("check_one_bill_info end")
+
+    def delete_pre_file(self,dir_path):
+        log_v("delete_pre_file begin")
+        file_list = os.listdir(dir_path)
+        self.app.log_info("准备删除多余文件")
+        for file_name in file_list:
+            file_path = os.path.join(dir_path, file_name)
+            if not os.path.isdir(file_path):
+                if not file_name.startswith(self.prefix):
+                    os.remove(file_path)
+                    self.app.log_info("完成删除多余文件:" + file_path)
+                    break
+        log_v("delete_pre_file end")
 
     def rename_download_file(self, dir_path):
         log_v("rename_download_file begin")
